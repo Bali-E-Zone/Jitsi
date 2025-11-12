@@ -20,6 +20,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Install Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -48,5 +60,3 @@ jobs:
           cache-to: type=registry,ref=henry768/jitsi:buildcache,mode=max
           build-args: |
             ROLLUP_SKIP_NODEJS=true
-            npm_config_platform=linux
-            npm_config_arch=x64
