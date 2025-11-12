@@ -6,9 +6,11 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY packages/ ./packages/
 
-# Install dependencies
-RUN npm install
+# Install dependencies with workspaces support
+RUN npm install -g npm@latest && \
+    npm install --legacy-peer-deps --workspaces
 
 # Copy the rest of the application
 COPY . .
@@ -19,5 +21,8 @@ EXPOSE 8080
 # Set environment variables
 ENV NODE_ENV=development
 
-# Install dependencies and start the application
+# Set the working directory to the main package
+WORKDIR /app/packages/app
+
+# Start the application
 CMD ["sh", "-c", "npm install -g npm@11.6.2 && npm start"]

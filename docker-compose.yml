@@ -1,13 +1,13 @@
 services:
   jitsi:
-    image: henry768/jitsi:latest_jitsi
+    build: .
     container_name: jitsi
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
       - NODE_ENV=development
-    working_dir: /app
+    working_dir: /app/packages/app
     volumes:
       - .:/app
       - /app/node_modules
