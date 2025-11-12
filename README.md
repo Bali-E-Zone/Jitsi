@@ -1,1 +1,1 @@
-Jitsi Integrated with ZITADEL
+Jitsi integrated with ZITADEL (Identity Provider).
