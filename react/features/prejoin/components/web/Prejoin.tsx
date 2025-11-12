@@ -422,7 +422,7 @@ const Prejoin = ({
                     onChange = { setName }
                     onKeyPress = { showUnsafeRoomWarning && !unsafeRoomConsent ? undefined : onInputKeyPress }
                     placeholder = { t('dialog.enterDisplayName') }
-                    readOnly = { readOnlyName }
+                    readOnly = { false }
                     value = { name } />
                 ) : (
                     <div className = { classes.avatarContainer }>
@@ -496,7 +496,24 @@ const Prejoin = ({
  * @returns {Object}
  */
 function mapStateToProps(state: IReduxState) {
-    const name = getDisplayName(state);
+    // Get the default name from ZITADEL if available, otherwise use the display name from state
+    let defaultName = getDisplayName(state);
+    try {
+        const userData = localStorage.getItem('zitadel_user_data');
+        if (userData) {
+            const parsedData = JSON.parse(userData);
+            // Use given_name and family_name if available, otherwise fall back to email
+            defaultName = parsedData.given_name && parsedData.family_name
+                ? `${parsedData.given_name} ${parsedData.family_name}`.trim()
+                : parsedData.email || defaultName;
+        }
+    } catch (e) {
+        console.error('Error parsing ZITADEL user data:', e);
+    }
+    
+    // Use the current display name if it exists, otherwise use the default name
+    const name = getDisplayName(state) || defaultName;
+    
     const showErrorOnJoin = isDisplayNameRequired(state) && !name;
     const { id: participantId } = getLocalParticipant(state) ?? {};
     const { joiningInProgress } = state['features/prejoin'];

@@ -108,6 +108,14 @@ class MeetingsList extends Component<IProps> {
     override render() {
         const { listEmptyComponent, meetings } = this.props;
 
+        // Check if user is authenticated with ZITADEL
+        const isAuthenticated = Boolean(localStorage.getItem('zitadel_access_token'));
+
+        // Don't render anything if user is not authenticated
+        if (!isAuthenticated) {
+            return null;
+        }
+
         /**
          * If there are no recent meetings we don't want to display anything.
          */

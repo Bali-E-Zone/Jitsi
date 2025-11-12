@@ -120,19 +120,56 @@ class ProfileTab extends AbstractDialogTab<IProps, any> {
 
         // Bind event handlers so they are only bound once for every instance.
         this._onAuthToggle = this._onAuthToggle.bind(this);
-        this._onDisplayNameChange = this._onDisplayNameChange.bind(this);
         this._onEmailChange = this._onEmailChange.bind(this);
+        this._onFamilyNameChange = this._onFamilyNameChange.bind(this);
+        this._onGivenNameChange = this._onGivenNameChange.bind(this);
     }
 
     /**
-     * Changes display name of the user.
+     * Changes given name of the user.
      *
-     * @param {string} value - The key event to handle.
+     * @param {string} value - The new given name.
      *
      * @returns {void}
      */
-    _onDisplayNameChange(value: string) {
-        super._onChange({ displayName: value });
+    _onGivenNameChange(value: string) {
+        const userData = JSON.parse(localStorage.getItem('zitadel_user_data') || '{}');
+        userData.given_name = value;
+        localStorage.setItem('zitadel_user_data', JSON.stringify(userData));
+
+        // Update display name as well
+        const displayName = value && userData.family_name
+            ? `${value} ${userData.family_name}`
+            : value || userData.family_name || '';
+
+        super._onChange({
+            displayName,
+            givenName: value
+        });
+    }
+
+    /**
+     * Changes family name of the user.
+     *
+     * @param {string} value - The new family name.
+     *
+     * @returns {void}
+     */
+    _onFamilyNameChange(value: string) {
+        const userData = JSON.parse(localStorage.getItem('zitadel_user_data') || '{}');
+
+        userData.family_name = value;
+        localStorage.setItem('zitadel_user_data', JSON.stringify(userData));
+
+        // Update display name as well
+        const displayName = value && userData.given_name
+            ? `${userData.given_name} ${value}`
+            : value || userData.given_name || '';
+
+        super._onChange({
+            displayName,
+            familyName: value
+        });
     }
 
     /**
@@ -143,6 +180,11 @@ class ProfileTab extends AbstractDialogTab<IProps, any> {
      * @returns {void}
      */
     _onEmailChange(value: string) {
+        const userData = JSON.parse(localStorage.getItem('zitadel_user_data') || '{}');
+        
+        userData.email = value;
+        localStorage.setItem('zitadel_user_data', JSON.stringify(userData));
+        
         super._onChange({ email: value });
     }
 
@@ -153,15 +195,24 @@ class ProfileTab extends AbstractDialogTab<IProps, any> {
      * @returns {ReactElement}
      */
     override render() {
+        // Get user data from ZITADEL
+        const userData = JSON.parse(localStorage.getItem('zitadel_user_data') || '{}');
         const {
             authEnabled,
-            displayName,
-            email,
+            email: propEmail,
             hideEmailInSettings,
             id,
             readOnlyName,
             t
         } = this.props;
+
+        // Use ZITADEL data if available, otherwise fall back to props
+        const givenName = userData.given_name || '';
+        const familyName = userData.family_name || '';
+        const email = userData.email || userData.preferred_username || propEmail || '';
+
+        // Check if we have ZITADEL user data
+        const hasZitadelData = !!(userData.given_name || userData.family_name || userData.email);
         const classes = withStyles.getClasses(this.props);
 
         return (
@@ -171,25 +222,45 @@ class ProfileTab extends AbstractDialogTab<IProps, any> {
                         participantId = { id }
                         size = { 60 } />
                 </div>
-                <Input
-                    className = { classes.bottomMargin }
-                    disabled = { readOnlyName }
-                    id = 'setDisplayName'
-                    label = { t('profile.setDisplayNameLabel') }
-                    name = 'name'
-                    onChange = { this._onDisplayNameChange }
-                    placeholder = { t('settings.name') }
-                    type = 'text'
-                    value = { displayName } />
+                <div className = 'name-fields-container' >
+                    <div className = 'name-field' >
+                        <Input
+                            className = { classes.bottomMargin }
+                            disabled = { readOnlyName || hasZitadelData }
+                            id = 'setGivenName'
+                            label = { t('profile.givenNameLabel', { defaultValue: 'First Name' }) }
+                            name = 'givenName'
+                            onChange = { this._onGivenNameChange }
+                            placeholder = { t('profile.givenNamePlaceholder', { defaultValue: 'First Name' }) }
+                            readOnly = { hasZitadelData }
+                            type = 'text'
+                            value = { givenName } />
+                    </div>
+                    <div className = 'name-field' >
+                        <Input
+                            className = { classes.bottomMargin }
+                            disabled = { readOnlyName || hasZitadelData }
+                            id = 'setFamilyName'
+                            label = { t('profile.familyNameLabel', { defaultValue: 'Last Name' }) }
+                            name = 'familyName'
+                            onChange = { this._onFamilyNameChange }
+                            placeholder = { t('profile.familyNamePlaceholder', { defaultValue: 'Last Name' }) }
+                            readOnly = { hasZitadelData }
+                            type = 'text'
+                            value = { familyName } />
+                    </div>
+                </div>
                 {!hideEmailInSettings && <div className = 'profile-edit-field'>
                     <Input
                         className = { classes.bottomMargin }
+                        disabled = { readOnlyName || hasZitadelData }
                         id = 'setEmail'
                         label = { t('profile.setEmailLabel') }
                         name = 'email'
                         onChange = { this._onEmailChange }
                         placeholder = { t('profile.setEmailInput') }
-                        type = 'text'
+                        readOnly = { hasZitadelData }
+                        type = 'email'
                         value = { email } />
                 </div>}
                 { authEnabled && this._renderAuth() }

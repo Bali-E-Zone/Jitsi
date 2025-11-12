@@ -30,7 +30,8 @@ const ZITADEL_CONFIG = {
     clientId: '346207076692853090@jitsimeet',
     clientSecret: 'GTwvQi21lvjGTwNMxkfMdLa1GzlddrJblsr83jzkZeypA4ZlqoLVGSnvqNasvvTZ',
     redirectUri: 'https://localhost:8080',
-    scope: 'openid profile email'
+    scope: 'openid profile email',
+    userInfoEndpoint: 'https://zit.pkc.pub/oidc/v1/userinfo'
 };
 
 /**
@@ -253,7 +254,8 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
         try {
             const tokenEndpoint = `${ZITADEL_CONFIG.issuer}/oauth/v2/token`;
             
-            const response = await fetch(tokenEndpoint, {
+            // Exchange authorization code for tokens
+            const tokenResponse = await fetch(tokenEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -267,14 +269,31 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
                 }),
             });
 
-            const data = await response.json();
+            const tokenData = await tokenResponse.json();
             
-            if (data.access_token) {
-                localStorage.setItem('zitadel_access_token', data.access_token);
-                localStorage.setItem('zitadel_id_token', data.id_token);
+            if (tokenData.access_token) {
+                localStorage.setItem('zitadel_access_token', tokenData.access_token);
                 
-                // Decode and store user info
-                const userInfo = this._parseJwt(data.id_token);
+                // Fetch user info using the access token
+                const userInfoResponse = await fetch(ZITADEL_CONFIG.userInfoEndpoint, {
+                    headers: {
+                        'Authorization': `Bearer ${tokenData.access_token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                let userInfo = {};
+                
+                if (userInfoResponse.ok) {
+                    userInfo = await userInfoResponse.json();
+                } else {
+                    // Fallback to ID token if userinfo endpoint fails
+                    console.warn('Failed to fetch user info, falling back to ID token');
+                    userInfo = this._parseJwt(tokenData.id_token);
+                }
+                
+                // Store the ID token and user info
+                localStorage.setItem('zitadel_id_token', tokenData.id_token);
                 localStorage.setItem('zitadel_user_data', JSON.stringify(userInfo));
                 
                 this._isAuthenticated = true;
@@ -377,50 +396,101 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
                                     noMargins = { true } />
                             </div>
                         </div>
-                        <div className = 'welcome-page-settings'>
-                            {/* Authentication Button */}
-                            {this._isAuthenticated ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ fontSize: '14px', color: '#333' }}>
-                                        {this._userData?.name || this._userData?.email || 'User'}
-                                    </span>
-                                    <button
-                                        className = 'welcome-page-button'
-                                        onClick = { this._handleLogout }
-                                        style={{
-                                            padding: '8px 16px',
+                        <div className = 'welcome-page-settings' style={{ display: 'flex', gap: '12px' }}>
+                            {/* Authentication Section */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                padding: '8px 16px',
+                                backgroundColor: '#fff',
+                                borderRadius: '6px',
+                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                                border: '1px solid #e0e0e0'
+                            }}>
+                                {this._isAuthenticated ? (
+                                    <>
+                                        <span style={{
                                             fontSize: '14px',
-                                            backgroundColor: '#fff',
                                             color: '#333',
-                                            border: '1px solid #ccc'
+                                            fontWeight: '500',
+                                            maxWidth: '200px',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {this._userData?.given_name && this._userData?.family_name 
+                                                ? `${this._userData.given_name} ${this._userData.family_name}`
+                                                : this._userData?.name || 'User'}
+                                        </span>
+                                        <button
+                                            onClick = { this._handleLogout }
+                                            style={{
+                                                padding: '6px 14px',
+                                                fontSize: '13px',
+                                                fontWeight: '500',
+                                                backgroundColor: '#f5f5f5',
+                                                color: '#333',
+                                                border: '1px solid #d0d0d0',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#e8e8e8';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#f5f5f5';
+                                            }}
+                                            type = 'button'>
+                                            Sign Out
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick = { this._handleLogin }
+                                        style={{
+                                            padding: '8px 20px',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            backgroundColor: '#0056D2',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            whiteSpace: 'nowrap'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#004BB8';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#0056D2';
                                         }}
                                         type = 'button'>
-                                        Sign Out
+                                        Sign In
                                     </button>
-                                </div>
-                            ) : (
-                                <button
-                                    className = 'welcome-page-button'
-                                    onClick = { this._handleLogin }
-                                    style={{
-                                        padding: '8px 16px',
-                                        fontSize: '14px',
-                                        marginRight: '10px'
-                                    }}
-                                    type = 'button'>
-                                    Sign In
-                                </button>
-                            )}
+                                )}
+                            </div>
                             
-                            <SettingsButton
-                                defaultTab = { SETTINGS_TABS.CALENDAR }
-                                isDisplayedOnWelcomePage = { true } />
-                            {showAdditionalToolbarContent
-                                ? <div
-                                    className = 'settings-toolbar-content'
-                                    ref = { this._setAdditionalToolbarContentRef } />
-                                : null
-                            }
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '8px',
+                                borderRadius: '6px',
+                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                            }}>
+                                <SettingsButton
+                                    defaultTab = { SETTINGS_TABS.CALENDAR }
+                                    isDisplayedOnWelcomePage = { true } />
+                                {showAdditionalToolbarContent
+                                    ? <div
+                                        className = 'settings-toolbar-content'
+                                        ref = { this._setAdditionalToolbarContentRef } />
+                                    : null
+                                }
+                            </div>
                         </div>
                         <h1 className = 'header-text-title'>
                             {t('welcomepage.headerTitle')}
