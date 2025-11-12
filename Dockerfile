@@ -20,4 +20,4 @@ EXPOSE 8080
 ENV NODE_ENV=development
 
 # Install dependencies and start the application
-CMD ["sh", "-c", "npm install && npm start"]
+CMD ["sh", "-c", "npm install -g npm@11.6.2 && npm start"]
