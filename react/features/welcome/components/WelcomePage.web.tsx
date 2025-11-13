@@ -22,16 +22,45 @@ import Tabs from './Tabs';
  */
 export const ROOM_NAME_VALIDATE_PATTERN_STR = '^[^?&:\u0022\u0027%#]+$';
 
+interface ZitadelConfig {
+    issuer: string;
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    scope: string;
+    userInfoEndpoint: string;
+}
+
 /**
- * ZITADEL Configuration
+ * Gets the ZITADEL configuration from environment variables
+ * @throws {Error} If any required environment variable is missing
  */
-const ZITADEL_CONFIG = {
-    issuer: 'https://zit.pkc.pub',
-    clientId: '346207076692853090@jitsimeet',
-    clientSecret: 'GTwvQi21lvjGTwNMxkfMdLa1GzlddrJblsr83jzkZeypA4ZlqoLVGSnvqNasvvTZ',
-    redirectUri: 'https://localhost:8080',
-    scope: 'openid profile email',
-    userInfoEndpoint: 'https://zit.pkc.pub/oidc/v1/userinfo'
+const getZitadelConfig = (): ZitadelConfig => {
+    const requiredVars = {
+        REACT_APP_ZITADEL_ISSUER: process.env.REACT_APP_ZITADEL_ISSUER,
+        REACT_APP_ZITADEL_CLIENT_ID: process.env.REACT_APP_ZITADEL_CLIENT_ID,
+        REACT_APP_ZITADEL_REDIRECT_URI: process.env.REACT_APP_ZITADEL_REDIRECT_URI,
+        REACT_APP_ZITADEL_SCOPE: process.env.REACT_APP_ZITADEL_SCOPE,
+        REACT_APP_ZITADEL_USER_INFO_ENDPOINT: process.env.REACT_APP_ZITADEL_USER_INFO_ENDPOINT
+    };
+
+    // Check for missing required variables
+    const missingVars = Object.entries(requiredVars)
+        .filter(([_, value]) => !value)
+        .map(([key]) => key);
+
+    if (missingVars.length > 0) {
+        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+    }
+
+    return {
+        issuer: requiredVars.REACT_APP_ZITADEL_ISSUER!,
+        clientId: requiredVars.REACT_APP_ZITADEL_CLIENT_ID!,
+        clientSecret: process.env.REACT_APP_ZITADEL_CLIENT_SECRET || '',
+        redirectUri: requiredVars.REACT_APP_ZITADEL_REDIRECT_URI!,
+        scope: requiredVars.REACT_APP_ZITADEL_SCOPE!,
+        userInfoEndpoint: requiredVars.REACT_APP_ZITADEL_USER_INFO_ENDPOINT!
+    };
 };
 
 /**
@@ -218,13 +247,23 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
      * @returns {void}
      */
     _checkAuthStatus() {
-        const token = localStorage.getItem('zitadel_access_token');
-        const userData = localStorage.getItem('zitadel_user_data');
-        
-        if (token && userData) {
-            this._isAuthenticated = true;
-            this._userData = JSON.parse(userData);
-            this.forceUpdate();
+        try {
+            // Get ZITADEL config to ensure it's valid
+            getZitadelConfig();
+            const token = localStorage.getItem('zitadel_access_token');
+            const userData = localStorage.getItem('zitadel_user_data');
+            
+            if (token && userData) {
+                this._isAuthenticated = true;
+                this._userData = JSON.parse(userData);
+                this.forceUpdate();
+            }
+        } catch (error) {
+            console.error('Error checking auth status:', error);
+            this._isAuthenticated = false;
+            this._userData = null;
+            localStorage.removeItem('zitadel_access_token');
+            localStorage.removeItem('zitadel_user_data');
         }
     }
 
@@ -235,11 +274,17 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
      * @returns {void}
      */
     _handleAuthCallback() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        
-        if (code) {
-            this._exchangeCodeForToken(code);
+        try {
+            // Get ZITADEL config to ensure it's valid
+            getZitadelConfig();
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            
+            if (code) {
+                this._exchangeCodeForToken(code);
+            }
+        } catch (error) {
+            console.error('Error handling auth callback:', error);
         }
     }
 
@@ -252,7 +297,8 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
      */
     async _exchangeCodeForToken(code: string) {
         try {
-            const tokenEndpoint = `${ZITADEL_CONFIG.issuer}/oauth/v2/token`;
+            const config = getZitadelConfig();
+            const tokenEndpoint = `${config.issuer}/oauth/v2/token`;
             
             // Exchange authorization code for tokens
             const tokenResponse = await fetch(tokenEndpoint, {
@@ -263,9 +309,9 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
                 body: new URLSearchParams({
                     grant_type: 'authorization_code',
                     code: code,
-                    redirect_uri: ZITADEL_CONFIG.redirectUri,
-                    client_id: ZITADEL_CONFIG.clientId,
-                    client_secret: ZITADEL_CONFIG.clientSecret,
+                    redirect_uri: config.redirectUri,
+                    client_id: config.clientId,
+                    client_secret: config.clientSecret,
                 }),
             });
 
@@ -275,7 +321,7 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
                 localStorage.setItem('zitadel_access_token', tokenData.access_token);
                 
                 // Fetch user info using the access token
-                const userInfoResponse = await fetch(ZITADEL_CONFIG.userInfoEndpoint, {
+                const userInfoResponse = await fetch(config.userInfoEndpoint, {
                     headers: {
                         'Authorization': `Bearer ${tokenData.access_token}`,
                         'Content-Type': 'application/json'
@@ -336,20 +382,48 @@ class WelcomePage extends AbstractWelcomePage<IProps> {
      * @returns {void}
      */
     _handleLogin() {
-        // Generate random state for security
-        const state = Math.random().toString(36).substring(7);
-        localStorage.setItem('oauth_state', state);
+        try {
+            const config = getZitadelConfig();
+            
+            // Generate random state for security
+            const state = Math.random().toString(36).substring(7);
+            localStorage.setItem('oauth_state', state);
 
-        // Construct authorization URL
-        const authUrl = new URL(`${ZITADEL_CONFIG.issuer}/oauth/v2/authorize`);
-        authUrl.searchParams.append('client_id', ZITADEL_CONFIG.clientId);
-        authUrl.searchParams.append('redirect_uri', ZITADEL_CONFIG.redirectUri);
-        authUrl.searchParams.append('response_type', 'code');
-        authUrl.searchParams.append('scope', ZITADEL_CONFIG.scope);
-        authUrl.searchParams.append('state', state);
+            // Validate and construct the issuer URL
+            let authUrl: URL;
+            try {
+                authUrl = new URL(config.issuer);
+                // Ensure the URL has a protocol
+                if (!authUrl.protocol || !authUrl.host) {
+                    throw new Error('Invalid issuer URL');
+                }
+                // Set the path to the authorization endpoint
+                authUrl.pathname = authUrl.pathname.endsWith('/') 
+                    ? 'oauth/v2/authorize' 
+                    : '/oauth/v2/authorize';
+            } catch (e) {
+                console.error('Invalid ZITADEL issuer URL:', config.issuer, e);
+                throw new Error('Invalid ZITADEL configuration: Invalid issuer URL');
+            }
 
-        // Redirect to ZITADEL login
-        window.location.href = authUrl.toString();
+            // Add query parameters
+            const params = new URLSearchParams();
+            params.append('client_id', config.clientId);
+            params.append('redirect_uri', config.redirectUri);
+            params.append('response_type', 'code');
+            params.append('scope', config.scope);
+            params.append('state', state);
+
+            // Combine URL and query parameters
+            const fullUrl = `${authUrl.toString()}?${params.toString()}`;
+            
+            // Redirect to ZITADEL login
+            window.location.href = fullUrl;
+        } catch (error) {
+            console.error('Login error:', error);
+            // You might want to show an error message to the user here
+            alert('Failed to initialize login. Please check the console for more details.');
+        }
     }
 
     /**

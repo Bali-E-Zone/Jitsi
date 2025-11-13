@@ -6,6 +6,15 @@ const { join, resolve } = require('path');
 const process = require('process');
 const webpack = require('webpack');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+const Dotenv = require('dotenv-webpack');
+
+// Load environment variables from .env file
+require('dotenv').config({ path: join(__dirname, '.env') });
+
+// Log environment variables for debugging
+console.log('Environment variables loaded:');
+console.log('REACT_APP_ZITADEL_ISSUER:', process.env.REACT_APP_ZITADEL_ISSUER);
+console.log('REACT_APP_ZITADEL_CLIENT_ID:', process.env.REACT_APP_ZITADEL_CLIENT_ID ? '*** (set)' : 'undefined');
 
 /**
  * The URL of the Jitsi Meet deployment to be proxy to in the context of
@@ -200,7 +209,22 @@ function getConfig(options = {}) {
                     allowAsyncCycles: false,
                     exclude: /node_modules/,
                     failOnError: false
-                })
+                }),
+            new webpack.DefinePlugin({
+                'process.env': {
+                    'REACT_APP_ZITADEL_ISSUER': JSON.stringify(process.env.REACT_APP_ZITADEL_ISSUER),
+                    'REACT_APP_ZITADEL_CLIENT_ID': JSON.stringify(process.env.REACT_APP_ZITADEL_CLIENT_ID),
+                    'REACT_APP_ZITADEL_CLIENT_SECRET': JSON.stringify(process.env.REACT_APP_ZITADEL_CLIENT_SECRET),
+                    'REACT_APP_ZITADEL_REDIRECT_URI': JSON.stringify(process.env.REACT_APP_ZITADEL_REDIRECT_URI),
+                    'REACT_APP_ZITADEL_SCOPE': JSON.stringify(process.env.REACT_APP_ZITADEL_SCOPE),
+                    'REACT_APP_ZITADEL_USER_INFO_ENDPOINT': JSON.stringify(process.env.REACT_APP_ZITADEL_USER_INFO_ENDPOINT)
+                }
+            }),
+            new Dotenv({
+                path: join(__dirname, '.env'),
+                systemvars: true,
+                silent: true
+            })
         ].filter(Boolean),
         resolve: {
             alias: {
