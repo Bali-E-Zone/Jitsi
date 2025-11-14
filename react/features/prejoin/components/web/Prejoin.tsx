@@ -36,6 +36,7 @@ import {
 } from '../../functions';
 import logger from '../../logger';
 import { hasDisplayName } from '../../utils';
+import { sendTelegramNotification } from '../../../base/util/telegramNotification';
 
 import JoinByPhoneDialog from './dialogs/JoinByPhoneDialog';
 
@@ -90,6 +91,11 @@ interface IProps {
      * Whether the name input should be read only or not.
      */
     readOnlyName: boolean;
+
+    /**
+     * The room name.
+     */
+    roomName?: string;
 
     /**
      * Sets visibility of the 'JoinByPhoneDialog'.
@@ -220,6 +226,7 @@ const Prejoin = ({
     participantId,
     prejoinConfig,
     readOnlyName,
+    roomName,
     setJoinByPhoneDialogVisiblity,
     showCameraPreview,
     showDialog,
@@ -242,15 +249,36 @@ const Prejoin = ({
     const dispatch = useDispatch();
 
     /**
+     * Sends Telegram notification when user joins.
+     *
+     * @returns {void}
+     */
+    const notifyTelegram = async () => {
+        try {
+            await sendTelegramNotification({
+                userName: name || 'Anonymous User',
+                roomName: roomName || 'Unknown Room',
+                timestamp: new Date().toLocaleString()
+            });
+        } catch (error) {
+            // Log error but don't block the join process
+            console.error('Failed to send Telegram notification:', error);
+        }
+    };
+
+    /**
      * Handler for the join button.
      *
      * @param {Object} e - The synthetic event.
      * @returns {void}
      */
-    const onJoinButtonClick = () => {
+    const onJoinButtonClick = async () => {
         if (showErrorOnJoin) {
             dispatch(openDisplayNamePrompt({
-                onPostSubmit: joinConference,
+                onPostSubmit: async () => {
+                    await notifyTelegram();
+                    joinConference();
+                },
                 validateInput: hasDisplayName
             }));
 
@@ -259,6 +287,10 @@ const Prejoin = ({
 
         logger.info('Prejoin join button clicked.');
 
+        // Send Telegram notification
+        await notifyTelegram();
+        
+        // Join the conference
         joinConference();
     };
 
@@ -335,12 +367,16 @@ const Prejoin = ({
      *
      * @returns {void}
      */
-    const onJoinConferenceWithoutAudioKeyPress = (e: React.KeyboardEvent) => {
+    const onJoinConferenceWithoutAudioKeyPress = async (e: React.KeyboardEvent) => {
         if (joinConferenceWithoutAudio
             && (e.key === ' '
                 || e.key === 'Enter')) {
             e.preventDefault();
             logger.info('Prejoin joinConferenceWithoutAudio dispatched on a key pressed.');
+            
+            // Send Telegram notification
+            await notifyTelegram();
+            
             joinConferenceWithoutAudio();
         }
     };
@@ -356,8 +392,12 @@ const Prejoin = ({
             testId: 'prejoin.joinWithoutAudio',
             icon: IconVolumeOff,
             label: t('prejoin.joinWithoutAudio'),
-            onClick: () => {
+            onClick: async () => {
                 logger.info('Prejoin join conference without audio pressed.');
+                
+                // Send Telegram notification
+                await notifyTelegram();
+                
                 joinConferenceWithoutAudio();
             },
             onKeyPress: onJoinConferenceWithoutAudioKeyPress
@@ -384,9 +424,13 @@ const Prejoin = ({
      * @param {KeyboardEvent} e - Keyboard event.
      * @returns {void}
      */
-    const onInputKeyPress = (e: React.KeyboardEvent) => {
+    const onInputKeyPress = async (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             logger.info('Dispatching join conference on Enter key press from the prejoin screen.');
+            
+            // Send Telegram notification
+            await notifyTelegram();
+            
             joinConference();
         }
     };
@@ -530,6 +574,7 @@ function mapStateToProps(state: IReduxState) {
         participantId,
         prejoinConfig: state['features/base/config'].prejoinConfig,
         readOnlyName: isNameReadOnly(state),
+        roomName: room,
         showCameraPreview: !isVideoMutedByUser(state),
         showDialog: isJoinByPhoneDialogVisible(state),
         showErrorOnJoin,
